@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+<meta name="description" content="简易函数图像生成器 — 输入解析式，即刻绘制函数图像">
+<title>简易函数图像生成器</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --primary: #4A6CF7;
+  --primary-dark: #3651d5;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --danger: #EF4444;
+  --success: #10B981;
+  --radius: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.04);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── 顶部标题栏 ── */
+.header {
+  background: linear-gradient(135deg, var(--primary), #6C63FF);
+  color: #fff;
+  padding: 14px 16px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(74,108,247,.25);
+  position: relative;
+  z-index: 10;
+}
+.header h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: .02em; }
+.header span { font-size: .75rem; opacity: .85; }
+
+/* ── 主体容器 ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 600px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px;
+  gap: 10px;
+}
+
+/* ── 卡片 ── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 14px;
+}
+
+/* ── 输入行 ── */
+.input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.input-row label {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+.input-row input {
+  flex: 1;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-family: "SF Mono", "Consolas", "Menlo", monospace;
+  outline: none;
+  transition: border-color .2s;
+  min-width: 0;
+  background: #fafbfc;
+}
+.input-row input:focus { border-color: var(--primary); }
+.btn-plot {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: .95rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .2s, transform .1s;
+}
+.btn-plot:active { transform: scale(.96); background: var(--primary-dark); }
+
+/* ── 错误提示 ── */
+.error-msg {
+  color: var(--danger);
+  font-size: .82rem;
+  margin-top: 6px;
+  min-height: 20px;
+  line-height: 1.4;
+}
+
+/* ── 符号按钮面板 ── */
+.symbol-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.symbol-panel .group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+.symbol-panel .group-label {
+  font-size: .7rem;
+  color: var(--text-secondary);
+  width: 100%;
+  margin: 2px 0 -2px;
+  padding-left: 2px;
+}
+.btn-sym {
+  background: #f1f5f9;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: .85rem;
+  cursor: pointer;
+  color: var(--text);
+  transition: all .15s;
+  font-family: "SF Mono", "Consolas", "Menlo", monospace;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-sym:active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  transform: scale(.94);
+}
+.btn-sym.sup { font-size: .78rem; }
+
+/* ── 函数类型快捷按钮 ── */
+.fn-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.btn-fn {
+  background: #eef2ff;
+  border: 1.5px solid transparent;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: .8rem;
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 500;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn-fn:active {
+  background: var(--primary);
+  color: #fff;
+  transform: scale(.95);
+}
+
+/* ── 画布容器 ── */
+.canvas-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: #fafbfc;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+.canvas-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* ── 图例和刻度提示 ── */
+.range-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: .72rem;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+.range-info .expr-display {
+  font-family: "SF Mono", "Consolas", monospace;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ── 缩放按钮 ── */
+.zoom-controls {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+.btn-zoom {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .15s;
+  color: var(--text);
+}
+.btn-zoom:active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-reset {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-size: .85rem;
+  cursor: pointer;
+  transition: all .15s;
+  font-weight: 500;
+  color: var(--text);
+}
+.btn-reset:active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ── 页脚 ── */
+.footer {
+  text-align: center;
+  font-size: .7rem;
+  color: var(--text-secondary);
+  padding: 8px;
+  opacity: .7;
+}
+
+/* 横屏适配 */
+@media (min-width: 640px) {
+  .main { gap: 12px; padding: 16px; }
+  .canvas-wrap { aspect-ratio: 4 / 3; }
+}
+</style>
+</head>
+<body>
+
+<!-- 顶部 -->
+<div class="header">
+  <h1>📐 简易函数图像生成器</h1>
+  <span>输入解析式，即刻绘制图像</span>
+</div>
+
+<!-- 主体 -->
+<div class="main">
+
+  <!-- 输入区 -->
+  <div class="card">
+    <div class="input-row">
+      <label for="exprInput">y =</label>
+      <input type="text" id="exprInput" placeholder="例: -x^2 + 4x + 5" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+      <button class="btn-plot" id="btnPlot" title="绘图">📈 绘图</button>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <!-- 特殊符号按钮 -->
+  <div class="card symbol-panel" id="symbolPanel">
+    <span class="group-label">🔣 数学符号 / 函数</span>
+    <button class="btn-sym" data-insert="x">x</button>
+    <button class="btn-sym sup" data-insert="^2">²</button>
+    <button class="btn-sym sup" data-insert="^3">³</button>
+    <button class="btn-sym" data-insert="^">^</button>
+    <button class="btn-sym" data-insert="sqrt()" data-offset="-1">√</button>
+    <button class="btn-sym" data-insert="pi">π</button>
+    <button class="btn-sym" data-insert="e">e</button>
+    <button class="btn-sym" data-insert="abs()" data-offset="-1">|x|</button>
+    <button class="btn-sym" data-insert="(">(</button>
+    <button class="btn-sym" data-insert=")">)</button>
+    <button class="btn-sym" data-insert="sin()" data-offset="-1">sin</button>
+    <button class="btn-sym" data-insert="cos()" data-offset="-1">cos</button>
+    <button class="btn-sym" data-insert="tan()" data-offset="-1">tan</button>
+    <button class="btn-sym" data-insert="log()" data-offset="-1">log</button>
+    <button class="btn-sym" data-insert="ln()" data-offset="-1">ln</button>
+    <button class="btn-sym" data-insert="+">+</button>
+    <button class="btn-sym" data-insert="-">−</button>
+    <button class="btn-sym" data-insert="*">×</button>
+    <button class="btn-sym" data-insert="/">÷</button>
+  </div>
+
+  <!-- 函数类型快捷选择 -->
+  <div class="card fn-chips" id="fnChips">
+    <span class="group-label" style="font-size:.7rem;color:var(--text-secondary);width:100%;margin-bottom:2px;">📋 快速选择函数类型</span>
+    <button class="btn-fn" data-expr="2*x + 1">🔵 一次函数</button>
+    <button class="btn-fn" data-expr="-x^2 + 4*x + 3">🔴 二次函数</button>
+    <button class="btn-fn" data-expr="x^3 - 3*x">🟢 三次函数</button>
+    <button class="btn-fn" data-expr="1/x">🟠 反比例</button>
+    <button class="btn-fn" data-expr="2^x">🟣 指数函数</button>
+    <button class="btn-fn" data-expr="log(x)">🟤 对数函数</button>
+    <button class="btn-fn" data-expr="sin(x)">🔴 正弦函数</button>
+    <button class="btn-fn" data-expr="cos(x)">🔵 余弦函数</button>
+    <button class="btn-fn" data-expr="tan(x)">🟡 正切函数</button>
+    <button class="btn-fn" data-expr="abs(x)">⚪ 绝对值</button>
+  </div>
+
+  <!-- 画布 -->
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="graphCanvas"></canvas>
+  </div>
+
+  <!-- 信息行 -->
+  <div class="range-info">
+    <span id="rangeLabel">x∈[-10, 10]  y∈[-10, 10]</span>
+    <span class="expr-display" id="exprDisplay"></span>
+  </div>
+
+  <!-- 缩放控制 -->
+  <div class="zoom-controls">
+    <button class="btn-zoom" id="btnZoomIn" title="放大">➕</button>
+    <button class="btn-zoom" id="btnZoomOut" title="缩小">➖</button>
+    <button class="btn-reset" id="btnReset" title="重置视图">↺ 重置</button>
+  </div>
+
+</div>
+
+<div class="footer">Canvas 实时渲染 · 支持触摸拖拽平移 / 双指缩放 · 扫码即用</div>
+
+<script>
+// ============================================================
+//  简易函数图像生成器 — 核心脚本
+// ============================================================
+
+// ── DOM 引用 ──
+const input    = document.getElementById('exprInput');
+const errorEl  = document.getElementById('errorMsg');
+const canvas   = document.getElementById('graphCanvas');
+const ctx      = canvas.getContext('2d');
+const wrap     = document.getElementById('canvasWrap');
+const rangeLbl = document.getElementById('rangeLabel');
+const exprDisp = document.getElementById('exprDisplay');
+
+// ── 视口状态 ──
+let viewCX = 0, viewCY = 0;        // 画布中心对应的世界坐标
+let ppu = 30;                       // pixels per unit（CSS像素/单位）
+const PPU_MIN = 2, PPU_MAX = 500;
+let cssW = 400, cssH = 400;        // Canvas CSS 像素尺寸（ctx.scale 之后的坐标系）
+
+// ── 当前表达式 ──
+let currentExpr = '';
+let evalFn = null;                   // (x:number)=>number | null
+
+// ============================================================
+//  第一部分：数学表达式解析器（递归下降）
+// ============================================================
+
+const FUNC_NAMES = ['sin','cos','tan','asin','acos','atan','log','ln','sqrt','abs','exp'];
+const CONST_MAP  = { pi: Math.PI, e: Math.E };
+
+function isDigit(ch) { return ch >= '0' && ch <= '9'; }
+function isLetter(ch) { return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'); }
+
+/** 预处理：替换特殊符号，插入隐式乘法 */
+function preprocess(expr) {
+  let s = expr
+    .replace(/\s+/g, '')                 // 去空格
+    .replace(/×/g, '*')
+    .replace(/÷/g, '/')
+    .replace(/−/g, '-')                  // Unicode 减号
+    .replace(/²/g, '^2')
+    .replace(/³/g, '^3')
+    .replace(/\|([^|]*)\|/g, 'abs($1)'); // |...| → abs(...)
+
+  // 插入隐式乘法
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    out += s[i];
+    if (i >= s.length - 1) continue;
+    const a = s[i], b = s[i + 1];
+
+    // needMul: 当前字符是数字/x/)，下个字符是(/字母/数字
+    const aOk = isDigit(a) || a === 'x' || a === ')';
+    const bOk = b === '(' || isLetter(b) || isDigit(b);
+    if (aOk && bOk) {
+      // 排除函数名：如果 out 末尾是函数名且 b 是 '('，不加 *
+      let skip = false;
+      if (b === '(') {
+        for (const fn of FUNC_NAMES) {
+          if (out.endsWith(fn)) { skip = true; break; }
+        }
+      }
+      // 排除数字+字母形成指数如 2e3
+      if (isDigit(a) && isLetter(b)) {
+        // 允许如 2e 开头的科学记数 → 实际上我们不支持科学记数，跳过检查
+      }
+      if (!skip) out += '*';
+    }
+  }
+  return out;
+}
+
+/** Token 类型 */
+const T = {
+  NUMBER: 'NUMBER', VARIABLE: 'VARIABLE', CONSTANT: 'CONSTANT',
+  FUNCTION: 'FUNCTION', PLUS: 'PLUS', MINUS: 'MINUS',
+  TIMES: 'TIMES', DIVIDE: 'DIVIDE', POWER: 'POWER',
+  LPAREN: 'LPAREN', RPAREN: 'RPAREN', END: 'END'
+};
+
+/** 词法分析 */
+function tokenize(expr) {
+  const tokens = [];
+  let i = 0;
+
+  while (i < expr.length) {
+    const ch = expr[i];
+
+    // 数字
+    if (isDigit(ch) || (ch === '.' && i + 1 < expr.length && isDigit(expr[i + 1]))) {
+      let num = '';
+      while (i < expr.length && (isDigit(expr[i]) || expr[i] === '.')) num += expr[i++];
+      tokens.push({ type: T.NUMBER, value: parseFloat(num) });
+      continue;
+    }
+
+    // 标识符
+    if (isLetter(ch)) {
+      let ident = '';
+      while (i < expr.length && isLetter(expr[i])) ident += expr[i++];
+
+      if (FUNC_NAMES.includes(ident) && i < expr.length && expr[i] === '(') {
+        tokens.push({ type: T.FUNCTION, value: ident });
+        tokens.push({ type: T.LPAREN, value: '(' });
+        i++; // 消费 '('
+      } else if (CONST_MAP.hasOwnProperty(ident)) {
+        tokens.push({ type: T.CONSTANT, value: CONST_MAP[ident] });
+      } else if (ident === 'x') {
+        tokens.push({ type: T.VARIABLE, value: 'x' });
+      } else {
+        throw new Error('未知标识符: ' + ident);
+      }
+      continue;
+    }
+
+    // 单字符 Token
+    i++;
+    switch (ch) {
+      case '+': tokens.push({ type: T.PLUS, value: '+' }); break;
+      case '-': tokens.push({ type: T.MINUS, value: '-' }); break;
+      case '*': tokens.push({ type: T.TIMES, value: '*' }); break;
+      case '/': tokens.push({ type: T.DIVIDE, value: '/' }); break;
+      case '^': tokens.push({ type: T.POWER, value: '^' }); break;
+      case '(': tokens.push({ type: T.LPAREN, value: '(' }); break;
+      case ')': tokens.push({ type: T.RPAREN, value: ')' }); break;
+      default: throw new Error('无法识别的字符: ' + ch);
+    }
+  }
+  tokens.push({ type: T.END, value: '' });
+  return tokens;
+}
+
+/** 递归下降解析器 */
+class Parser {
+  constructor(tokens) { this.tokens = tokens; this.pos = 0; this.xVal = 0; }
+
+  cur()  { return this.tokens[this.pos]; }
+  eat()  { const t = this.tokens[this.pos]; this.pos++; return t; }
+
+  evaluate(x) {
+    this.xVal = x; this.pos = 0;
+    const v = this.parseExpr();
+    if (this.cur().type !== T.END) throw new Error('表达式意外结束');
+    return v;
+  }
+
+  parseExpr() {
+    let left = this.parseTerm();
+    while (this.cur().type === T.PLUS || this.cur().type === T.MINUS) {
+      const op = this.eat().type;
+      const right = this.parseTerm();
+      left = (op === T.PLUS) ? left + right : left - right;
+    }
+    return left;
+  }
+
+  parseTerm() {
+    let left = this.parseUnary();
+    while (this.cur().type === T.TIMES || this.cur().type === T.DIVIDE) {
+      const op = this.eat().type;
+      const right = this.parseUnary();
+      if (op === T.DIVIDE) {
+        if (right === 0) throw new Error('除以零');
+        left /= right;
+      } else {
+        left *= right;
+      }
+    }
+    return left;
+  }
+
+  parseUnary() {
+    // 连续一元 +/-  同时处理 power（右结合: base ^ exponent）
+    return this.parsePower();
+  }
+
+  parsePower() {
+    let base = this.parseAtom();
+    while (this.cur().type === T.POWER) {
+      this.eat(); // ^
+      const exp = this.parseAtom();
+      base = Math.pow(base, exp);
+    }
+    return base;
+  }
+
+  parseAtom() {
+    // 一元 +/-
+    if (this.cur().type === T.PLUS || this.cur().type === T.MINUS) {
+      const op = this.eat().type;
+      const v = this.parseAtom();
+      return op === T.MINUS ? -v : v;
+    }
+
+    const t = this.cur();
+
+    if (t.type === T.NUMBER)    { this.eat(); return t.value; }
+    if (t.type === T.VARIABLE)  { this.eat(); return this.xVal; }
+    if (t.type === T.CONSTANT)  { this.eat(); return t.value; }
+
+    if (t.type === T.FUNCTION) {
+      const name = t.value;
+      this.eat(); // func
+      this.eat(); // '('
+      const arg = this.parseExpr();
+      if (this.cur().type !== T.RPAREN) throw new Error('缺少右括号');
+      this.eat(); // ')'
+      return applyFunc(name, arg);
+    }
+
+    if (t.type === T.LPAREN) {
+      this.eat(); // '('
+      const v = this.parseExpr();
+      if (this.cur().type !== T.RPAREN) throw new Error('缺少右括号');
+      this.eat(); // ')'
+      return v;
+    }
+
+    throw new Error('意外的表达式: ' + t.value);
+  }
+}
+
+function applyFunc(name, x) {
+  switch (name) {
+    case 'sin':  return Math.sin(x);
+    case 'cos':  return Math.cos(x);
+    case 'tan':  return Math.tan(x);
+    case 'asin': return Math.asin(x);
+    case 'acos': return Math.acos(x);
+    case 'atan': return Math.atan(x);
+    case 'log':  return x <= 0 ? NaN : Math.log10(x);
+    case 'ln':   return x <= 0 ? NaN : Math.log(x);
+    case 'sqrt': return x < 0  ? NaN : Math.sqrt(x);
+    case 'abs':  return Math.abs(x);
+    case 'exp':  return Math.exp(x);
+    default: throw new Error('未知函数: ' + name);
+  }
+}
+
+/** 编译表达式 → 返回 (x)=>number 函数 */
+function compileExpression(raw) {
+  const expr = preprocess(raw);
+  if (!expr.trim()) throw new Error('请输入函数解析式');
+  const tokens = tokenize(expr);
+  // 快速测试
+  const parser = new Parser(tokens);
+  parser.evaluate(0);  // 测试解析
+  return (x) => new Parser(tokenize(expr)).evaluate(x);
+}
+
+// ============================================================
+//  第二部分：Canvas 渲染引擎
+// ============================================================
+
+/** 世界坐标 ⇄ 屏幕坐标 */
+function worldToScreen(wx, wy) {
+  return {
+    sx: (wx - viewCX) * ppu + cssW / 2,
+    sy: cssH / 2 - (wy - viewCY) * ppu
+  };
+}
+function screenToWorld(sx, sy) {
+  return {
+    wx: (sx - cssW / 2) / ppu + viewCX,
+    wy: viewCY - (sy - cssH / 2) / ppu
+  };
+}
+
+/** 好看的刻度步长 */
+function niceStep(rangePixels, maxTicks) {
+  const rough = rangePixels / ppu / maxTicks;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const r = rough / mag;
+  let step = mag;
+  if (r <= 1.5) step = mag;
+  else if (r <= 3.5) step = 2 * mag;
+  else if (r <= 7.5) step = 5 * mag;
+  else step = 10 * mag;
+  return Math.max(step, 1e-10);
+}
+
+/** 主渲染函数（带断线检测） */
+function renderWithGapDetection() {
+  const W = cssW, H = cssH;
+  ctx.clearRect(0, 0, W, H);
+
+  const leftWx   = (0 - W/2) / ppu + viewCX;
+  const rightWx  = (W - W/2) / ppu + viewCX;
+  const topWy    = viewCY - (0 - H/2) / ppu;
+  const bottomWy = viewCY - (H - H/2) / ppu;
+
+  // ── 网格 ──
+  const step = niceStep(Math.max(W, H), 12);
+  ctx.strokeStyle = '#e8ecf0';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  let gx = Math.floor(leftWx / step) * step;
+  while (gx <= rightWx) {
+    const { sx } = worldToScreen(gx, 0);
+    ctx.moveTo(sx, 0); ctx.lineTo(sx, H);
+    gx += step;
+  }
+  let gy = Math.floor(bottomWy / step) * step;
+  while (gy <= topWy) {
+    const { sy } = worldToScreen(0, gy);
+    ctx.moveTo(0, sy); ctx.lineTo(W, sy);
+    gy += step;
+  }
+  ctx.stroke();
+
+  // ── 坐标轴 ──
+  const origin = worldToScreen(0, 0);
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, origin.sy); ctx.lineTo(W, origin.sy);
+  ctx.moveTo(origin.sx, 0); ctx.lineTo(origin.sx, H);
+  ctx.stroke();
+
+  ctx.fillStyle = '#94a3b8';
+  ctx.beginPath();
+  ctx.moveTo(W - 2, origin.sy); ctx.lineTo(W - 12, origin.sy - 5); ctx.lineTo(W - 12, origin.sy + 5);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(origin.sx, 2); ctx.lineTo(origin.sx - 5, 12); ctx.lineTo(origin.sx + 5, 12);
+  ctx.fill();
+
+  // ── 刻度标签 ──
+  ctx.fillStyle = '#64748b';
+  ctx.font = '11px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  gx = Math.floor(leftWx / step) * step;
+  while (gx <= rightWx) {
+    if (Math.abs(gx) > step * 0.01) {
+      const { sx } = worldToScreen(gx, 0);
+      const ly = Math.min(Math.max(origin.sy + 6, 0), H - 16);
+      ctx.fillText(formatNum(gx), sx, ly);
+    }
+    gx += step;
+  }
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  gy = Math.floor(bottomWy / step) * step;
+  while (gy <= topWy) {
+    if (Math.abs(gy) > step * 0.01) {
+      const { sy } = worldToScreen(0, gy);
+      const lx = Math.min(Math.max(origin.sx - 8, 20), W - 8);
+      ctx.fillText(formatNum(gy), lx, sy);
+    }
+    gy += step;
+  }
+  ctx.fillStyle = '#475569';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  if (origin.sx > 10 && origin.sx < W - 10 && origin.sy > 10 && origin.sy < H - 10) {
+    ctx.fillText('O', origin.sx - 4, origin.sy + 4);
+  }
+
+  // ── 函数曲线（带断线检测） ──
+  if (!evalFn) {
+    rangeLbl.textContent = `x∈[${formatNum(leftWx)}, ${formatNum(rightWx)}]  y∈[${formatNum(bottomWy)}, ${formatNum(topWy)}]`;
+    return;
+  }
+
+  ctx.strokeStyle = '#EF4444';
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const segments = [];  // [{sx, sy}[]]
+
+  let currentSeg = [];
+  let prevSY = null;
+
+  for (let sx = 0; sx <= W; sx += 1) {
+    const { wx } = screenToWorld(sx, 0);
+    let y;
+    try { y = evalFn(wx); } catch { prevSY = null; continue; }
+
+    if (!isFinite(y) || isNaN(y)) {
+      if (currentSeg.length) { segments.push(currentSeg); currentSeg = []; }
+      prevSY = null;
+      continue;
+    }
+
+    const { sy } = worldToScreen(0, y);
+
+    // 断线检测
+    if (prevSY !== null && Math.abs(sy - prevSY) > H * 0.75) {
+      if (currentSeg.length) { segments.push(currentSeg); currentSeg = []; }
+    }
+
+    currentSeg.push({ sx, sy });
+    prevSY = sy;
+  }
+  if (currentSeg.length) segments.push(currentSeg);
+
+  // 绘制所有线段
+  for (const seg of segments) {
+    if (seg.length < 2) continue;
+    ctx.beginPath();
+    ctx.moveTo(seg[0].sx, seg[0].sy);
+    for (let i = 1; i < seg.length; i++) {
+      ctx.lineTo(seg[i].sx, seg[i].sy);
+    }
+    ctx.stroke();
+  }
+
+  rangeLbl.textContent =
+    `x∈[${formatNum(leftWx)}, ${formatNum(rightWx)}]  y∈[${formatNum(bottomWy)}, ${formatNum(topWy)}]`;
+}
+
+/** 数字格式化 */
+function formatNum(n) {
+  if (Number.isInteger(n)) return n.toString();
+  const s = n.toPrecision(4);
+  return s.replace(/0+$/, '').replace(/\.$/, '');
+}
+
+// ============================================================
+//  第三部分：画布尺寸管理
+// ============================================================
+
+function resizeCanvas() {
+  const rect = wrap.getBoundingClientRect();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cssW = rect.width;
+  cssH = rect.height;
+  canvas.width  = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width  = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
+  draw();
+}
+
+// ============================================================
+//  第四部分：触摸与鼠标交互
+// ============================================================
+
+let dragStart = null;
+let dragViewCX = 0, dragViewCY = 0;
+let pinchStartDist = 0;
+let pinchStartPPU = 0;
+let lastTap = 0;
+
+function getEventPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  return { x: clientX - rect.left, y: clientY - rect.top };
+}
+
+function getTwoFingerDist(e) {
+  if (!e.touches || e.touches.length < 2) return 0;
+  const dx = e.touches[0].clientX - e.touches[1].clientX;
+  const dy = e.touches[0].clientY - e.touches[1].clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+  // 双指 → 交给 pinch
+  if (e.pointerType === 'touch' && e.isPrimary === false) return;
+  dragStart = getEventPos(e);
+  dragViewCX = viewCX;
+  dragViewCY = viewCY;
+  canvas.setPointerCapture(e.pointerId);
+
+  // 双击检测
+  const now = Date.now();
+  if (now - lastTap < 300) resetView();
+  lastTap = now;
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragStart) return;
+
+  // 双指缩放
+  if (e.pointerType === 'touch' && e.isPrimary === false) return;
+
+  const pos = getEventPos(e);
+  const dx = pos.x - dragStart.x;
+  const dy = pos.y - dragStart.y;
+
+  viewCX = dragViewCX - dx / ppu;
+  viewCY = dragViewCY + dy / ppu;
+  draw();
+});
+
+canvas.addEventListener('pointerup', (e) => {
+  dragStart = null;
+  canvas.releasePointerCapture(e.pointerId);
+});
+
+canvas.addEventListener('pointerleave', () => { dragStart = null; });
+
+// 双指缩放（wheel 事件处理）
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+  zoomAtScreenPoint(e.offsetX, e.offsetY, factor);
+}, { passive: false });
+
+// 触摸双指缩放
+canvas.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    dragStart = null;
+    pinchStartDist = getTwoFingerDist(e);
+    pinchStartPPU = ppu;
+  }
+});
+
+canvas.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const dist = getTwoFingerDist(e);
+    if (pinchStartDist > 0) {
+      const factor = dist / pinchStartDist;
+      ppu = Math.min(PPU_MAX, Math.max(PPU_MIN, pinchStartPPU * factor));
+      draw();
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => {
+  pinchStartDist = 0;
+});
+
+function zoomAtScreenPoint(sx, sy, factor) {
+  const { wx, wy } = screenToWorld(sx, sy);
+  ppu = Math.min(PPU_MAX, Math.max(PPU_MIN, ppu * factor));
+  // 调整视口使该点保持不动
+  const { sx: sx2, sy: sy2 } = worldToScreen(wx, wy);
+  viewCX -= (sx2 - sx) / ppu;
+  viewCY += (sy2 - sy) / ppu;
+  draw();
+}
+
+// ============================================================
+//  第五部分：UI 事件处理
+// ============================================================
+
+function draw() {
+  renderWithGapDetection();
+  if (currentExpr) exprDisp.textContent = 'y = ' + currentExpr;
+  else exprDisp.textContent = '';
+}
+
+function setExpression(raw) {
+  currentExpr = raw;
+  input.value = raw;
+  errorEl.textContent = '';
+  try {
+    evalFn = compileExpression(raw);
+    draw();
+    // 更新 URL hash
+    if (raw) {
+      history.replaceState(null, '', '#' + encodeURIComponent(raw));
+    }
+  } catch (e) {
+    evalFn = null;
+    errorEl.textContent = '⚠ ' + e.message;
+    draw();
+  }
+}
+
+function resetView() {
+  viewCX = 0;
+  viewCY = 0;
+  ppu = 30;
+  draw();
+}
+
+// 绘图按钮
+document.getElementById('btnPlot').addEventListener('click', () => {
+  setExpression(input.value.trim());
+});
+
+// 回车键
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') setExpression(input.value.trim());
+});
+
+// 符号按钮
+document.querySelectorAll('.btn-sym').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const text = btn.dataset.insert;
+    const offset = parseInt(btn.dataset.offset || '0');
+    insertAtCursor(input, text, offset);
+    input.focus();
+  });
+});
+
+// 函数快捷按钮
+document.querySelectorAll('.btn-fn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const expr = btn.dataset.expr;
+    input.value = expr;
+    setExpression(expr);
+  });
+});
+
+// 缩放按钮
+document.getElementById('btnZoomIn').addEventListener('click', () => {
+  zoomAtScreenPoint(cssW / 2, cssH / 2, 1.25);
+});
+document.getElementById('btnZoomOut').addEventListener('click', () => {
+  zoomAtScreenPoint(cssW / 2, cssH / 2, 0.8);
+});
+document.getElementById('btnReset').addEventListener('click', resetView);
+
+/** 在 input 光标处插入文本 */
+function insertAtCursor(el, text, cursorOffset) {
+  const start = el.selectionStart;
+  const end   = el.selectionEnd;
+  const before = el.value.substring(0, start);
+  const after  = el.value.substring(end);
+  el.value = before + text + after;
+  const pos = start + text.length + cursorOffset;
+  el.selectionStart = el.selectionEnd = Math.max(0, Math.min(el.value.length, pos));
+}
+
+// ============================================================
+//  第六部分：初始化
+// ============================================================
+
+function init() {
+  resizeCanvas();
+  // 从 URL hash 恢复表达式
+  const hash = window.location.hash.slice(1);
+  if (hash) {
+    const expr = decodeURIComponent(hash);
+    input.value = expr;
+    setExpression(expr);
+  } else {
+    // 默认展示一个二次函数示例
+    setExpression('-x^2 + 4*x + 5');
+  }
+}
+
+window.addEventListener('resize', () => {
+  resizeCanvas();
+});
+
+// 防止 iOS 橡皮筋效果影响画布
+document.body.addEventListener('touchmove', (e) => {
+  if (e.target.closest('#canvasWrap')) e.preventDefault();
+}, { passive: false });
+
+init();
+</script>
+</body>
+</html>
